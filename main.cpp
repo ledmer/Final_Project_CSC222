@@ -1,69 +1,80 @@
 #include <SFML/Graphics.hpp>
-#include <SFML/System.hpp>
-#include <iostream>
-bool GAME = true;
-sf::RenderWindow window(sf::VideoMode(400, 200), "SFML works!");
+#include <math.h>
+class Player {
+public:
+    sf::RectangleShape shape;
+    sf::Vector2f velocity;
 
-class Player{
-    
-    sf::Sprite p;
-    sf::Texture player_texture;
+    Player(float x, float y) {
+        shape.setSize(sf::Vector2f(50, 50));
+        shape.setPosition(x, y);
+        shape.setFillColor(sf::Color::Green);
+    }
 
-    public:
-        void player(){
-            if((!player_texture.loadFromFile("img/player.png"))){
-                throw std::invalid_argument("AddPositiveIntegers arguments must be positive");
-            }
-            p.setTexture(player_texture);
-        }
-        void player_movement(){
-            int x_mov = 0;
-            int y_mov = 0;
-            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left))
-            {
-                x_mov -= 1;
-            }
-            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right))
-            {
-                x_mov += 1;
-
-            }
-            if(sf::Keyboard::isKeyPressed(sf::Keyboard::Down)){
-                y_mov -= 1;
-
-            }
-            else if(sf::Keyboard::isKeyPressed(sf::Keyboard::Up)){
-                y_mov += 1;
-
-            }
-            p.move(x_mov, y_mov);
-        };
-        void draw(){
-            window.draw(p);
-        };
-
+    void update() {
+        shape.move(velocity);
+    }
 };
 
-int main(){  
-    sf::Sprite Enemy;
-    sf::Texture e_texture;
-    Player p;
-    p.draw();
+class Enemy {
+public:
+    sf::RectangleShape shape;
+    float speed;
 
-    while (window.isOpen())
-    {
+    Enemy(float x, float y, float spd) : speed(spd) {
+        shape.setSize(sf::Vector2f(50, 50));
+        shape.setPosition(x, y);
+        shape.setFillColor(sf::Color::Red);
+    }
+
+    void update(const sf::Vector2f& playerPos) {
+        // Move towards the player
+        sf::Vector2f direction = playerPos - shape.getPosition();
+        direction = sf::Vector2f(direction.x / std::sqrt(direction.x * direction.x + direction.y * direction.y),
+                                 direction.y / std::sqrt(direction.x * direction.x + direction.y * direction.y));
+        shape.move(direction * speed);
+    }
+};
+
+int main() {
+    sf::RenderWindow window(sf::VideoMode(800, 600), "SFML Game");
+
+    Player player(100, 100);
+    Enemy enemy(700, 500, .5f);
+
+    Enemy enemy2(700, 500, 0.7f);
+    while (window.isOpen()) {
         sf::Event event;
-        while (window.pollEvent(event))
-        {
-            if (event.type == sf::Event::Closed)
-            {    
+        while (window.pollEvent(event)) {
+            if (event.type == sf::Event::Closed) {
                 window.close();
             }
-        } 
-        p.player_movement();
+        }
 
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::H)) {
+            player.velocity.x = -1.0f;
+        } else if (sf::Keyboard::isKeyPressed(sf::Keyboard::L)) {
+            player.velocity.x = 1.0f;
+        } else {
+            player.velocity.x = 0.0f;
+        }
+
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::K)) {
+            player.velocity.y = -1.0f;
+        } else if (sf::Keyboard::isKeyPressed(sf::Keyboard::J)) {
+            player.velocity.y = 1.0f;
+        } else {
+            player.velocity.y = 0.0f;
+        }
+
+        player.update();
+        enemy.update(player.shape.getPosition());
+        enemy2.update(player.shape.getPosition());
         window.clear();
-        p.draw();
+        window.draw(player.shape);
+        window.draw(enemy.shape);
+        window.draw(enemy2.shape);
+
         window.display();
     }
 
