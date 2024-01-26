@@ -1,0 +1,26 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "Build SFML App",
+        "type": "shell",
+        "command": "g++",
+        "args": [
+          "-std=c++17",
+          "-Wall",
+          "-g",
+          "main.cpp",  // Replace with your source file(s)
+          "-o",
+          "vamp",   // Replace with your desired executable name
+          "-lsfml-graphics",
+          "-lsfml-window",
+          "-lsfml-system"
+        ],
+        "group": {
+          "kind": "build",
+          "isDefault": true
+        }
+      }
+    ]
+  }
+  
