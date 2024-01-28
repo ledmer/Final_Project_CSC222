@@ -1,21 +1,26 @@
 #include <SFML/Graphics.hpp>
-#include <math.h>
-#include <SFML/Window.hpp>
 #include <vector>
-#include <cstdlib> // for std::rand
-#include <ctime>   // for std::time
+#include <cstdlib>
+#include <ctime>
+#include <cmath>
+
+class Weapon {
+public:
+    float bulletSpeed;
+    Weapon(float speed) : bulletSpeed(speed) {}
+};
 
 class Bullet {
 public:
     sf::RectangleShape shape;
     sf::Vector2f velocity;
+    const Weapon& weapon;
 
-    Bullet(float x, float y, float speed) {
+    Bullet(float x, float y, const Weapon& w) : weapon(w) {
         shape.setSize(sf::Vector2f(10, 10));
         shape.setPosition(x, y);
         shape.setFillColor(sf::Color::Yellow);
-        velocity = sf::Vector2f(0.0f, 0.0f); // Bullets initially stationary
-        speed_ = speed;
+        velocity = sf::Vector2f(0.0f, 0.0f);
     }
 
     void update() {
@@ -23,11 +28,8 @@ public:
     }
 
     void setDirection(sf::Vector2f direction) {
-        velocity = direction * speed_;
+        velocity = direction * weapon.bulletSpeed;
     }
-
-private:
-    float speed_;
 };
 
 class Player {
@@ -37,16 +39,28 @@ public:
     std::vector<Bullet> bullets;
     sf::Clock shootTimer;
 
-    Player(float x, float y) {
+    std::vector<Weapon> weapons;
+    int currentWeaponIndex;
+
+    Player(float x, float y) : currentWeaponIndex(0) {
         shape.setSize(sf::Vector2f(50, 50));
         shape.setPosition(x, y);
         shape.setFillColor(sf::Color::Green);
+
+        weapons.push_back(Weapon(5.0f * 1.5f));  // Weapon 1 with 1.5 times speed
     }
 
     void update() {
-        shape.move(velocity);
+        shape.move(velocity * 1.5f);
 
-        // Update bullets
+        sf::Vector2f newPosition = shape.getPosition();
+        if (newPosition.x < 0) newPosition.x = 0;
+        if (newPosition.x > 800 - shape.getSize().x) newPosition.x = 800 - shape.getSize().x;
+        if (newPosition.y < 0) newPosition.y = 0;
+        if (newPosition.y > 600 - shape.getSize().y) newPosition.y = 600 - shape.getSize().y;
+
+        shape.setPosition(newPosition);
+
         for (auto& bullet : bullets) {
             bullet.update();
         }
@@ -57,45 +71,56 @@ public:
             sf::Vector2f direction(0.0f, 0.0f);
 
             switch (directionKey) {
-                case sf::Keyboard::W:
-                    direction.y = -1.0f;
-                    break;
-                case sf::Keyboard::S:
-                    direction.y = 1.0f;
-                    break;
-                case sf::Keyboard::A:
-                    direction.x = -1.0f;
-                    break;
-                case sf::Keyboard::D:
-                    direction.x = 1.0f;
-                    break;
-                default:
-                    break;
+                case sf::Keyboard::W: direction.y = -1.0f; break;
+                case sf::Keyboard::S: direction.y = 1.0f; break;
+                case sf::Keyboard::A: direction.x = -1.0f; break;
+                case sf::Keyboard::D: direction.x = 1.0f; break;
             }
 
-            bullets.push_back(Bullet(shape.getPosition().x + shape.getSize().x / 2, shape.getPosition().y + shape.getSize().y / 2, 5.0f));
-            bullets.back().setDirection(direction);
+            if (currentWeaponIndex == 0) {
+                for (int i = 0; i < 3; ++i) {
+                    float spreadAngle = ((std::rand() % 5) - 2) * 5.0f;
+                    sf::Vector2f spreadDirection = rotateVector(direction, spreadAngle);
+
+                    bullets.push_back(Bullet(shape.getPosition().x + shape.getSize().x / 2,
+                                             shape.getPosition().y + shape.getSize().y / 2,
+                                             weapons[currentWeaponIndex]));
+                    bullets.back().setDirection(spreadDirection);
+                }
+            } else {
+                bullets.push_back(Bullet(shape.getPosition().x + shape.getSize().x / 2,
+                                         shape.getPosition().y + shape.getSize().y / 2,
+                                         weapons[currentWeaponIndex]));
+                bullets.back().setDirection(direction);
+            }
 
             shootTimer.restart();
         }
     }
+
+private:
+    sf::Vector2f rotateVector(const sf::Vector2f& vector, float degrees) {
+        float radians = degrees * (3.14159265f / 180.0f);
+        float cosine = std::cos(radians);
+        float sine = std::sin(radians);
+        return sf::Vector2f(vector.x * cosine - vector.y * sine, vector.x * sine + vector.y * cosine);
+    }
 };
+
 class Enemy {
 public:
     sf::RectangleShape shape;
     float speed;
 
-    Enemy(float x, float y, float spd) : speed(spd) {
+    Enemy(float x, float y, float spd) : speed(spd * 1.5f) {  // Enemy speed multiplied by 1.5
         shape.setSize(sf::Vector2f(50, 50));
         shape.setPosition(x, y);
         shape.setFillColor(sf::Color::Red);
     }
 
     void update(const sf::Vector2f& playerPos) {
-        // Move towards the player
         sf::Vector2f direction = playerPos - shape.getPosition();
-        direction = sf::Vector2f(direction.x / std::sqrt(direction.x * direction.x + direction.y * direction.y),
-                                 direction.y / std::sqrt(direction.x * direction.x + direction.y * direction.y));
+        direction /= std::sqrt(direction.x * direction.x + direction.y * direction.y);
         shape.move(direction * speed);
     }
 
@@ -115,7 +140,6 @@ public:
 
     Game() : window(sf::VideoMode(800, 600), "SFML Game"), player(100, 100),
              gameRunning(false), startScreen(true) {
-        // Seed the random number generator
         std::srand(std::time(0));
     }
 
@@ -123,7 +147,6 @@ public:
         while (window.isOpen()) {
             handleEvents();
             update();
-
             window.clear();
             draw();
             window.display();
@@ -131,6 +154,7 @@ public:
     }
 
 private:
+    int botsKilled = 0;
     void handleEvents() {
         sf::Event event;
         while (window.pollEvent(event)) {
@@ -141,23 +165,22 @@ private:
                 sf::Time t = sf::seconds(1);
 
                 if (startScreen) {
-                    startScreen = false;
-                    gameRunning = true;
-                } else if (!gameRunning) { // Loss screen
-                    sf::sleep(t);
+                    if (event.key.code == sf::Keyboard::Num1) {
+                        player.currentWeaponIndex = 0;
+                        startScreen = false;
+                        gameRunning = true;
+                    }
+                } else if (!gameRunning) {
                     if (event.key.code == sf::Keyboard::Escape) {
                         window.close();
-                    } else {
-                        // Only transition to start screen if any key is pressed
+                    } else if (event.key.code == sf::Keyboard::Enter) {
                         startScreen = true;
                         gameRunning = false;
                         player = Player(100, 100);
                         enemies.clear();
                         enemySpawnTimer.restart();
                     }
-                    sf::sleep(t);
                 } else if (gameRunning) {
-                    // Check shooting keys
                     if (event.key.code == sf::Keyboard::W || event.key.code == sf::Keyboard::S ||
                         event.key.code == sf::Keyboard::A || event.key.code == sf::Keyboard::D) {
                         player.shoot(event.key.code);
@@ -184,26 +207,24 @@ private:
             }
             player.update();
 
-            // Check and spawn a new enemy every second
             if (enemySpawnTimer.getElapsedTime().asSeconds() >= 1.0) {
                 spawnEnemy();
                 enemySpawnTimer.restart();
             }
 
-            // Update all enemies
             for (auto& enemy : enemies) {
                 enemy.update(player.shape.getPosition());
                 if (enemy.checkCollision(player)) {
-                    // Perform action on collision (e.g., end the game)
                     gameRunning = false;
                 }
             }
 
-            // Check bullet-enemy collision
             for (auto& bullet : player.bullets) {
                 for (auto it = enemies.begin(); it != enemies.end();) {
                     if (bullet.shape.getGlobalBounds().intersects(it->shape.getGlobalBounds())) {
                         it = enemies.erase(it);
+                        botsKilled++;
+
                     } else {
                         ++it;
                     }
@@ -213,25 +234,20 @@ private:
     }
 
     void update() {
-        if (gameRunning) {
-            // Additional game-specific updates can be added here
-        }
+        // Additional game-specific updates can be added here
     }
 
     void draw() {
         if (startScreen) {
-            // Draw start screen with default font
             sf::Font font;
-            if (!font.loadFromFile("universal-serif.ttf")) {
-                // error...
-            }
-            sf::Text text("Press any key to start", font, 30);
-            text.setFillColor(sf::Color::Red);
 
-            text.setPosition(250, 300);
-            window.draw(text);
+            if (font.loadFromFile("universal-serif.ttf")) {
+                sf::Text text("Press 1 to start", font, 30);
+                text.setFillColor(sf::Color::Green);
+                text.setPosition(250, 300);
+                window.draw(text);
+            }
         } else if (gameRunning) {
-            // Draw game elements
             window.draw(player.shape);
             for (const auto& enemy : enemies) {
                 window.draw(enemy.shape);
@@ -239,34 +255,42 @@ private:
             for (const auto& bullet : player.bullets) {
                 window.draw(bullet.shape);
             }
+            sf::Font font;
+            if (font.loadFromFile("universal-serif.ttf")) {
+                sf::Text text("Bots Killed: " + std::to_string(botsKilled), font, 20);
+                text.setFillColor(sf::Color::White);
+                text.setPosition(window.getSize().x - text.getLocalBounds().width - 10, 10);
+                window.draw(text);
+            }
         } else if (!gameRunning) {
             sf::Font font;
-            if (!font.loadFromFile("universal-serif.ttf")) {
-                // error...
+            if (font.loadFromFile("universal-serif.ttf")) {
+                sf::Text text("You lost press esc to exit", font, 30);
+                sf::Text text2("Press enter to try again", font, 30);
+                text2.setFillColor(sf::Color::Green);
+                text2.setPosition(160, 300);
+                text.setFillColor(sf::Color::Green);
+                text.setPosition(150, 250);
+                window.draw(text);
+                window.draw(text2);
             }
-            sf::Text text("You lost press esc to exit, any key to try again", font, 30);
-            text.setFillColor(sf::Color::Red);
-            text.setPosition(250, 300);
-            window.draw(text);
         }
     }
 
     void spawnEnemy() {
-        constexpr int maxAttempts = 10; // Maximum attempts to find a suitable position
-
+        constexpr int maxAttempts = 10;
+        int pos_x = player.shape.getPosition().x;
+        int pos_y = player.shape.getPosition().y;
         for (int attempt = 0; attempt < maxAttempts; ++attempt) {
-            // Generate random positions for enemies
-            float x = static_cast<float>(std::rand() % 800); // Random x position between 0 and 800
-            float y = static_cast<float>(std::rand() % 600); // Random y position between 0 and 600
+            float x = static_cast<float>(std::rand() % 800);
+            float y = static_cast<float>(std::rand() % 600);
 
-            // Check if the position is far enough from the player
-            if (std::abs(x - player.shape.getPosition().x) >= 100 && y >= player.shape.getPosition().y + 100) {
-                enemies.push_back(Enemy(x, y, 0.5f));
-                return; // Successful spawn, exit the loop
+            if (std::abs(x - pos_x) >= 120 && y >= pos_y + 120) {
+                enemies.push_back(Enemy(x, y, 0.4f));
+                return;
             }
         }
 
-        // If no suitable position is found after maxAttempts, use a simpler strategy
         float x = static_cast<float>(std::rand() % 800);
         float y = static_cast<float>(std::rand() % 600);
         enemies.push_back(Enemy(x, y, 0.5f));
@@ -276,6 +300,5 @@ private:
 int main() {
     Game game;
     game.run();
-
     return 0;
 }
